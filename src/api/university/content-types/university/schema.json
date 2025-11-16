@@ -1,0 +1,30 @@
+{
+  "kind": "collectionType",
+  "collectionName": "universities",
+  "info": {
+    "singularName": "university",
+    "pluralName": "universities",
+    "displayName": "institution"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "degree": {
+      "type": "string"
+    },
+    "study_preferences": {
+      "type": "json"
+    },
+    "student": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::student.student",
+      "mappedBy": "instituion"
+    }
+  }
+}

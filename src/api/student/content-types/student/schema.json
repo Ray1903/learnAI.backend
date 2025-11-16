@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "students",
+  "info": {
+    "singularName": "student",
+    "pluralName": "students",
+    "displayName": "student"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "user": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "first_name": {
+      "type": "string"
+    },
+    "last_name": {
+      "type": "string"
+    },
+    "date_of_birth": {
+      "type": "date"
+    },
+    "gender": {
+      "type": "enumeration",
+      "enum": [
+        "male",
+        "female",
+        "other"
+      ]
+    },
+    "phone": {
+      "type": "string"
+    },
+    "instituion": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::university.university",
+      "inversedBy": "student"
+    },
+    "chat_sessions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::chat-session.chat-session",
+      "mappedBy": "student"
+    },
+    "document_students": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::files-student.files-student"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "kind": "collectionType",
+  "collectionName": "document_chunks",
+  "info": {
+    "singularName": "document-chunk",
+    "pluralName": "document-chunks",
+    "displayName": "document_chunk"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "content": {
+      "type": "text"
+    },
+    "chunk_index": {
+      "type": "integer"
+    },
+    "embedding": {
+      "type": "text"
+    },
+    "embedding_model": {
+      "type": "string",
+      "default": "text-embedding-3-small"
+    },
+    "document_student": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::files-student.files-student",
+      "inversedBy": "document_chunks"
+    }
+  }
+}

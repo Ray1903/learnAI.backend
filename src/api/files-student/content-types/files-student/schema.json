@@ -1,0 +1,42 @@
+{
+  "kind": "collectionType",
+  "collectionName": "files_students",
+  "info": {
+    "singularName": "files-student",
+    "pluralName": "files-students",
+    "displayName": "document_student"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "file": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "summary": {
+      "type": "text"
+    },
+    "student": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::student.student"
+    },
+    "document_chunks": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::document-chunk.document-chunk",
+      "mappedBy": "document_student"
+    }
+  }
+}
