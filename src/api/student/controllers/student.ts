@@ -38,6 +38,17 @@ export default factories.createCoreController(
             "Email, password, first name, and last name are required"
           );
         }
+        const userExist = await strapi
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: {
+              email: email,
+            },
+          });
+
+        if (userExist) {
+          return ctx.badRequest("User already exists");
+        }
 
         const user = await strapi.plugins[
           "users-permissions"
