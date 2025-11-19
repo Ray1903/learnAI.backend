@@ -78,13 +78,39 @@ npm install
 npm run develop
 ```
 
+## Autenticación
+
+### Tipos de Autenticación
+
+El backend utiliza dos tipos de autenticación:
+
+#### 1. **JWT de Usuario (Política `global::token-jwt`)**
+- **Uso**: Todos los endpoints personalizados de la API
+- **Obtención**: Response de `/api/students/signup` o `/api/students/login`
+- **Header**: `Authorization: Bearer <jwt_token>`
+- **Expiración**: 30 días (configurable)
+- **Endpoints protegidos**: `/api/chat/*`, `/api/documents/*`
+
+#### 2. **API Token de Strapi**
+- **Uso**: Content Types nativos y panel de administración
+- **Obtención**: Settings → API Tokens en el panel admin
+- **Header**: `Authorization: Bearer <strapi_api_token>`
+- **Expiración**: No expira (puede ser revocado)
+- **Endpoints**: `/api/students`, `/api/chat-sessions`, `/api/files-students`, etc.
+
+### Endpoints Públicos (sin autenticación)
+- `POST /api/students/signup` - Registro
+- `POST /api/students/login` - Inicio de sesión
+
+---
+
 ## Endpoints de la API
 
 ### Autenticación de Estudiantes
 
 #### Registro de Estudiante
 ```http
-POST /api/student/signup
+POST /api/students/signup
 Content-Type: application/json
 
 {
@@ -121,16 +147,38 @@ Content-Type: application/json
 
 #### Inicio de Sesión
 ```http
-POST /api/student/login
+POST /api/students/login
 Content-Type: application/json
 
-{
+{  
   "email": "estudiante@ejemplo.com",
   "password": "password123"
 }
 ```
 
+**Respuesta:**
+```json
+{
+  "message": "Login successful",
+  "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 1,
+    "username": "estudiante@ejemplo.com",
+    "email": "estudiante@ejemplo.com"
+  },
+  "student": {
+    "id": 1,
+    "first_name": "Juan",
+    "last_name": "Pérez"
+  }
+}
+```
+
+**Nota:** Guarda el `jwt` para usarlo en los siguientes requests con el header `Authorization: Bearer <jwt>`
+
 ### Gestión de Documentos
+
+**Nota:** Todos los endpoints de documentos requieren autenticación JWT.
 
 #### Subir Documento
 ```http
@@ -413,10 +461,15 @@ Authorization: Bearer {jwt_token}
 
 ## Consideraciones de Seguridad
 
-1. **Autenticación JWT**: Todos los endpoints protegidos requieren token JWT
-2. **Validación de Archivos**: Solo se permiten tipos de archivo específicos
-3. **Límites de Tamaño**: Los archivos tienen límites de tamaño configurables
-4. **API Key**: La clave de OpenAI debe mantenerse segura en variables de entorno
+1. **Autenticación JWT**: Todos los endpoints personalizados requieren token JWT obtenido del login
+2. **Política de Autenticación**: La política `global::token-jwt` valida el token y extrae información del usuario
+3. **Contexto de Usuario**: Los controladores tienen acceso a `ctx.state.user` y `ctx.state.student`
+4. **Validación de Archivos**: Solo se permiten tipos de archivo específicos (PDF, DOCX, TXT)
+5. **Límites de Tamaño**: Los archivos tienen límites de tamaño configurables
+6. **API Key**: La clave de OpenAI debe mantenerse segura en variables de entorno
+7. **Separación de Autenticación**: 
+   - JWT de usuario para endpoints personalizados
+   - API Token de Strapi para content types nativos y admin
 
 ## Desarrollo y Testing
 
@@ -451,9 +504,12 @@ Puedes usar herramientas como Postman o curl para probar los endpoints. Asegúra
 
 ```bash
 # 1. Registrar estudiante
-curl -X POST http://localhost:1337/api/student/signup \
+curl -X POST http://localhost:1337/api/students/signup \
   -H "Content-Type: application/json" \
   -d '{"email":"test@test.com","password":"123456","first_name":"Test","last_name":"User"}'
+
+# Guardar el JWT de la respuesta
+export JWT="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 # 2. Subir documento (embeddings se generan automáticamente)
 curl -X POST http://localhost:1337/api/documents/upload \
