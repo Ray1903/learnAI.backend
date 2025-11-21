@@ -120,7 +120,7 @@ Content-Type: application/json
   "last_name": "Pérez",
   "phone": "+1234567890",
   "date_of_birth": "1995-05-15",
-  "gender": "male"
+  "gender": "male"  // Valores permitidos: "male" | "female" | "other"
 }
 ```
 
@@ -310,6 +310,33 @@ Authorization: Bearer {jwt_token}
 }
 ```
 
+#### Listar Sesiones de Chat del Estudiante Autenticado
+```http
+GET /api/chat
+Authorization: Bearer {jwt_token}
+```
+
+**Descripción:**
+- Devuelve todas las sesiones de chat asociadas al estudiante autenticado (según el JWT).
+- No requiere parámetros en la URL ni en el cuerpo.
+
+**Respuesta:**
+```json
+{
+  "message": "Sesiones de chat obtenidas correctamente",
+  "data": [
+    {
+      "id": 15,
+      "documentId": "abc123def456",
+      "title": "Sesión de Estudio - Matemáticas",
+      "student": 4,
+      "createdAt": "2025-01-01T12:00:00.000Z",
+      "updatedAt": "2025-01-01T12:10:00.000Z"
+    }
+  ]
+}
+```
+
 #### Obtener Sesión de Chat
 ```http
 GET /api/chat/{session_document_id}  // ← String UUID de Strapi
@@ -408,7 +435,7 @@ Authorization: Bearer {jwt_token}
 - `last_name`: Apellido del estudiante
 - `phone`: Teléfono (opcional)
 - `date_of_birth`: Fecha de nacimiento (opcional)
-- `gender`: Género (opcional)
+- `gender`: Género (opcional). Valores permitidos: `"male"`, `"female"`, `"other"`
 
 #### Files-Student (Documentos)
 - `title`: Título del documento
@@ -430,7 +457,7 @@ Authorization: Bearer {jwt_token}
 - `chat_messages`: Mensajes del chat
 
 #### Chat-Message
-- `role`: "user" o "assistant"
+- `role`: Rol del mensaje. Valores permitidos: `"user"`, `"assistant"`
 - `message_index`: Índice del mensaje
 - `content`: Contenido del mensaje
 - `metadata`: Metadatos adicionales (JSON)

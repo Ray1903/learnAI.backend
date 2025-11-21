@@ -38,6 +38,33 @@ export default factories.createCoreController(
       }
     },
 
+    async listByUser(ctx) {
+      try {
+        const studentId = ctx.state.studentId;
+
+        if (!studentId) {
+          return ctx.unauthorized("No se encontró el estudiante autenticado");
+        }
+
+        const sessions = await strapi.db
+          .query("api::chat-session.chat-session")
+          .findMany({
+            where: { student: studentId },
+            orderBy: { createdAt: "desc" },
+          });
+
+        return ctx.send({
+          message: "Sesiones de chat obtenidas correctamente",
+          data: sessions,
+        });
+      } catch (error) {
+        strapi.log.error("Error listando sesiones de chat:", error);
+        return ctx.internalServerError(
+          "No se pudieron obtener las sesiones de chat"
+        );
+      }
+    },
+
     async getChatSession(ctx) {
       try {
         const { documentId } = ctx.params;

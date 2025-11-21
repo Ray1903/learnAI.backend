@@ -11,6 +11,15 @@ export default {
     },
     {
       method: "GET",
+      path: "/chat",
+      handler: "chat-session.listByUser",
+      config: {
+        policies: ["global::token-jwt"],
+        auth: false,
+      },
+    },
+    {
+      method: "GET",
       path: "/chat/:documentId",
       handler: "chat-session.getChatSession",
       config: {
