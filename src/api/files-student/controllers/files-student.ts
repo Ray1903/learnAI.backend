@@ -96,8 +96,8 @@ export default factories.createCoreController(
               file: strapiFile.id,
               summary: summary,
               student: student,
-              publishedAt: new Date(),
             },
+            status: 'published',
           });
 
         // Crear chunks del documento si existen
@@ -110,7 +110,6 @@ export default factories.createCoreController(
               content: processedDocument.chunks[i],
               chunk_index: i + 1,
               document_id: documentStudent.id.toString(),  // Usar id convertido a string para la relación
-              publishedAt: new Date(),
             };
 
             // Agregar embedding si está disponible
@@ -127,6 +126,7 @@ export default factories.createCoreController(
               .documents('api::document-chunk.document-chunk')
               .create({
                 data: chunkData,
+                status: 'published',
               });
               
             console.log(`Chunk ${i + 1} created with ID:`, createdChunk.id);

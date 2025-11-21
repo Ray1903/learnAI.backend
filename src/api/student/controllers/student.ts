@@ -68,8 +68,8 @@ export default factories.createCoreController(
             phone,
             date_of_birth,
             gender,
-            publishedAt: new Date(),
           },
+          status: 'published',
         });
 
         const jwt = strapi.plugins["users-permissions"].services.jwt.issue({

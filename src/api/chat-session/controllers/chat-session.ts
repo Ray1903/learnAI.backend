@@ -25,6 +25,7 @@ export default factories.createCoreController(
               title: title,
               student: student,
             },
+            status: 'published',
           });
 
         ctx.status = 201;
@@ -143,8 +144,8 @@ export default factories.createCoreController(
               content: message,
               chat_session: session.documentId,
               agent_name: role === "user" ? "student" : "assistant",
-              publishedAt: new Date(),
             },
+            status: 'published',
           });
 
         // Si es un mensaje del usuario, generar respuesta del asistente
@@ -157,14 +158,16 @@ export default factories.createCoreController(
                 where: { documentId: sessionId },
                 populate: {
                   student: true,
+                  chat_messages: {
+                    orderBy: { createdAt: "asc" },
+                  },
                 },
               });
 
             const studentDocumentId = sessionWithStudent?.student;
 
-            // Preparar historial de mensajes para OpenAI
-            const chatHistory = session.chat_messages
-              .concat([userMessage])
+            // Preparar historial de mensajes para OpenAI (incluye el mensaje recién guardado)
+            const chatHistory = (sessionWithStudent?.chat_messages || [])
               .map((msg) => ({
                 role: msg.role === "user" ? "user" : "assistant",
                 content: msg.content,
@@ -188,8 +191,8 @@ export default factories.createCoreController(
                   content: assistantResponse,
                   chat_session: session.documentId,
                   agent_name: "studio_assistant",
-                  publishedAt: new Date(),
                 },
+                status: 'published',
               });
 
             return ctx.send({
@@ -218,8 +221,8 @@ export default factories.createCoreController(
                   content: "Lo siento, estoy experimentando dificultades técnicas. Por favor, intenta de nuevo en unos momentos.",
                   chat_session: session.documentId,
                   agent_name: "studio_assistant",
-                  publishedAt: new Date(),
                 },
+                status: 'published',
               });
 
             return ctx.send({
