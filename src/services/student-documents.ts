@@ -24,6 +24,7 @@ class StudentDocumentsService {
         orderBy: { updatedAt: "desc" },
         limit,
         populate: {
+          file: true,
           document_chunks: {
             select: ["id"],
           },
@@ -33,7 +34,7 @@ class StudentDocumentsService {
     return (documents || []).map((doc: any) => ({
       id: doc.id,
       documentId: doc.documentId,
-      title: doc.title || "Documento sin título",
+      title: doc.file?.name || doc.title || "Documento sin título",
       summary: doc.summary || undefined,
       chunksCount: doc.document_chunks?.length || 0,
       updatedAt: doc.updatedAt,
@@ -81,21 +82,98 @@ class StudentDocumentsService {
       return [];
     }
 
-    return (
-      await strapi.db.query("api::files-student.files-student").findMany({
+    const baseQuery = {
+      populate: {
+        file: true,
+        document_chunks: {
+          orderBy: { chunk_index: "asc" },
+        },
+      },
+    } as const;
+
+    const directMatches = (await strapi.db
+      .query("api::files-student.files-student")
+      .findMany({
+        ...baseQuery,
         where: {
           student: studentId,
           title: {
             $containsi: query,
           },
         },
-        populate: {
-          document_chunks: {
-            orderBy: { chunk_index: "asc" },
-          },
+      })) as any[];
+
+    if (directMatches.length) {
+      return directMatches;
+    }
+
+    const normalizedQuery = this.normalizeText(query);
+    const fallbackCandidates = (await strapi.db
+      .query("api::files-student.files-student")
+      .findMany({
+        ...baseQuery,
+        where: {
+          student: studentId,
         },
-      })
-    ) as any[];
+        limit: 25,
+      })) as any[];
+
+    if (!fallbackCandidates.length) {
+      return [];
+    }
+
+    const scoredCandidates = fallbackCandidates
+      .map(doc => ({
+        doc,
+        score: this.calculateTitleSimilarity(
+          normalizedQuery,
+          this.normalizeText(doc.file?.name || doc.title || "")
+        ),
+      }))
+      .filter(candidate => candidate.score >= 0.35)
+      .sort((a, b) => b.score - a.score)
+      .map(candidate => candidate.doc);
+
+    return scoredCandidates;
+  }
+
+  private normalizeText(text: string): string {
+    return text
+      .normalize("NFD")
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  private calculateTitleSimilarity(query: string, title: string): number {
+    if (!query || !title) {
+      return 0;
+    }
+
+    if (title.includes(query)) {
+      const ratio = query.length / Math.max(title.length, 1);
+      return Math.min(1, 0.6 + ratio * 0.4);
+    }
+
+    const queryTokens = this.splitTokens(query);
+    const titleTokens = this.splitTokens(title);
+
+    if (!queryTokens.length || !titleTokens.length) {
+      return 0;
+    }
+
+    const intersection = queryTokens.filter(token => titleTokens.includes(token)).length;
+    const tokenScore = intersection / queryTokens.length;
+
+    const prefixScore = title.startsWith(query) ? 0.5 : 0;
+
+    return Math.min(1, tokenScore + prefixScore);
+  }
+
+  private splitTokens(text: string): string[] {
+    return text.split(" ").filter(Boolean);
   }
 }
 

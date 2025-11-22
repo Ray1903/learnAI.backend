@@ -107,6 +107,57 @@ export default factories.createCoreController(
       }
     },
 
+    async deleteSession(ctx) {
+      try {
+        const { documentId } = ctx.params;
+        const studentId = ctx.state.studentId;
+
+        if (!documentId) {
+          return ctx.badRequest("Falta el ID de la sesión");
+        }
+
+        if (!studentId) {
+          return ctx.unauthorized("No se encontró el estudiante autenticado");
+        }
+
+        const session = await strapi.db
+          .query("api::chat-session.chat-session")
+          .findOne({
+            where: { documentId, student: studentId },
+            populate: {
+              chat_messages: true,
+            },
+          });
+
+        if (!session) {
+          return ctx.notFound("Sesión de chat no encontrada o no autorizada");
+        }
+
+        if (session.chat_messages?.length) {
+          await Promise.all(
+            session.chat_messages.map((message: any) =>
+              strapi
+                .documents("api::chat-message.chat-message")
+                .delete({ documentId: message.documentId })
+            )
+          );
+        }
+
+        await strapi
+          .documents("api::chat-session.chat-session")
+          .delete({ documentId: session.documentId });
+
+        return ctx.send({
+          message: "Sesión de chat eliminada correctamente",
+        });
+      } catch (error) {
+        strapi.log.error("Error eliminando chat-session:", error);
+        return ctx.internalServerError(
+          "No se pudo eliminar la sesión de chat"
+        );
+      }
+    },
+
     async sendMessage(ctx) {
       try {
         const { sessionId, message, role = "user" } = ctx.request.body;
@@ -165,6 +216,7 @@ export default factories.createCoreController(
               });
 
             const studentDocumentId = sessionWithStudent?.student;
+            console.log('[ChatSession] Student ID for OpenAI:', studentDocumentId);
 
             // Preparar historial de mensajes para OpenAI (incluye el mensaje recién guardado)
             const chatHistory = (sessionWithStudent?.chat_messages || [])

@@ -16,7 +16,6 @@ interface DocumentContext {
 
 interface DocumentDirective {
   action: "summarize" | "use";
-  query: string;
 }
 
 class OpenAIService {
@@ -79,40 +78,52 @@ class OpenAIService {
 
       let relevantContext: DocumentContext[] = semanticContext;
       let directiveInstruction = '';
+      let documentsOverview = '';
 
       if (directive && studentId) {
         console.log('[OpenAI] Directive detected:', directive);
-        const directiveContext = await this.getDirectiveContext(
-          strapi,
-          studentId,
-          directive
+        directiveInstruction = this.buildDirectiveInstruction(
+          directive,
+          lastUserMessage.content
         );
-        console.log('[OpenAI] Directive context found:', directiveContext.length, 'documents');
 
-        if (directiveContext.length > 0) {
-          directiveInstruction = this.buildDirectiveInstruction(
-            directive,
-            directiveContext
-          );
-
-          const dedupedSemanticContext = semanticContext.filter(context =>
-            !directiveContext.some(directiveDoc =>
-              (directiveDoc.documentId && directiveDoc.documentId === context.documentId) ||
-              (directiveDoc.title === context.title && directiveDoc.content === context.content)
-            )
-          );
-
-          relevantContext = directiveContext.concat(dedupedSemanticContext);
-        } else {
-          // Si no se encontró el documento, agregar instrucción de "no encontrado"
-          directiveInstruction = this.buildDirectiveInstruction(
-            directive,
-            []
-          );
+        // Load all student documents when directive is detected
+        try {
+          const allDocuments = await this.loadAllStudentDocuments(strapi, studentId);
+          console.log('[OpenAI] Loaded documents for directive:', allDocuments.length);
+          if (allDocuments.length > 0) {
+            // Combine with semantic context, avoiding duplicates
+            const dedupedSemanticContext = semanticContext.filter(context =>
+              !allDocuments.some(doc =>
+                (doc.documentId && doc.documentId === context.documentId) ||
+                (doc.title === context.title)
+              )
+            );
+            relevantContext = allDocuments.concat(dedupedSemanticContext);
+            console.log('[OpenAI] Total relevant context:', relevantContext.length);
+          }
+        } catch (loadError) {
+          console.error('Error loading all documents for directive:', loadError);
         }
       }
 
-      const systemPrompt = this.buildSystemPrompt(relevantContext, directiveInstruction);
+      if (studentId) {
+        try {
+          documentsOverview = await this.studentDocumentsService.buildDocumentsOverview(
+            strapi,
+            studentId,
+            20
+          );
+        } catch (overviewError) {
+          console.error('Error building documents overview:', overviewError);
+        }
+      }
+
+      const systemPrompt = this.buildSystemPrompt(
+        relevantContext,
+        directiveInstruction,
+        documentsOverview
+      );
       
       const completion = await this.client.chat.completions.create({
         model: this.agentModel,
@@ -213,7 +224,8 @@ class OpenAIService {
    */
   private buildSystemPrompt(
     documentContext?: DocumentContext[],
-    directiveInstruction?: string
+    directiveInstruction?: string,
+    documentsOverview?: string
   ): string {
     let prompt = `Eres un asistente de estudio inteligente y útil. Tu objetivo es ayudar a los estudiantes a comprender mejor sus materiales de estudio, responder preguntas académicas y proporcionar explicaciones claras.
 
@@ -229,6 +241,13 @@ Instrucciones:
 - Si necesitas aclaración, haz preguntas de seguimiento
 - Sugiere métodos de estudio cuando sea apropiado
 - Si hay documentos disponibles, úsalos como contexto para tus respuestas`;
+
+    if (documentsOverview && documentsOverview.trim().length > 0) {
+      prompt += `
+
+DOCUMENTOS DISPONIBLES DEL ESTUDIANTE:
+${documentsOverview}`;
+    }
 
     if (directiveInstruction) {
       prompt += `
@@ -289,58 +308,58 @@ ${directiveInstruction}`;
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
 
-    const summarizeKeywords = ['resumen', 'resume', 'resumir', 'resumelo', 'resumirlo', 'resumelo'];
-    const useKeywords = ['usa', 'usar', 'utiliza', 'utilizar', 'basate', 'basate', 'basandote', 'apoyate', 'apoyate', 'considera', 'consulta'];
+    const summarizePattern = /\bresum[a-zñ]*\b/;
+    const usePattern = /\b(usa|usar|utiliza|utilizar|basate|basandote|apoyate|considera|consulta)\b/;
 
-    let action: DocumentDirective['action'] | null = null;
-    if (summarizeKeywords.some(keyword => normalized.includes(keyword))) {
-      action = 'summarize';
-    } else if (useKeywords.some(keyword => normalized.includes(keyword))) {
-      action = 'use';
-    }
-
-    if (!action) {
-      return null;
-    }
-
-    const regexes = [
-      /(?:documento|doc|archivo)\s+(?:titulado|llamado|de nombre)?\s*["""']?([^"""'\n]+)["""']?/i,
-      /(?:resumen|resume|resumir)\s+(?:de|del|sobre)?\s*["""']?([^"""'\n]+)["""']?/i,
-      /["""']([^"""']+)["""']?/i,
-      /(?:documento|doc|archivo)\s*:\s*([^\n]+)/i,
-    ];
-
-    for (const regex of regexes) {
-      const match = message.match(regex);
-      if (match && match[1]) {
-        let query = match[1]
-          .replace(/por favor.*$/i, '')
-          .replace(/gracias.*$/i, '')
-          .trim();
-        
-        // Remove common file extensions for better matching
-        query = query.replace(/\.(pdf|docx?|txt|pptx?|xlsx?)$/i, '');
-        
-        if (query) {
-          return { action, query };
-        }
-      }
+    if (summarizePattern.test(normalized)) {
+      return { action: 'summarize' };
+    } else if (usePattern.test(normalized)) {
+      return { action: 'use' };
     }
 
     return null;
   }
 
-  private async getDirectiveContext(
+
+
+  private buildDirectiveInstruction(
+    directive: DocumentDirective,
+    userMessage: string
+  ): string {
+    const baseInstruction =
+      directive.action === 'summarize'
+        ? 'El estudiante solicitó un RESUMEN de un documento'
+        : 'El estudiante pidió que UTILICES un documento específico';
+
+    return `${baseInstruction}.
+
+Mensaje original: "${userMessage}"
+
+INSTRUCCIONES CRÍTICAS:
+1. Revisa la lista de documentos disponibles arriba
+2. Identifica cuál documento es el más relevante para la solicitud del estudiante
+3. Si encuentras un documento apropiado, úsalo para cumplir la solicitud
+4. Si ningún documento es relevante, explica qué documentos tienes disponibles y pide aclaración
+5. SIEMPRE menciona qué documento elegiste y por qué`;
+  }
+
+  private async loadAllStudentDocuments(
     strapi: any,
-    studentId: string,
-    directive: DocumentDirective
+    studentId: string
   ): Promise<DocumentContext[]> {
     try {
-      const documents = await this.studentDocumentsService.findDocumentsByQuery(
-        strapi,
-        studentId,
-        directive.query
-      );
+      const documents = await strapi.db
+        .query('api::files-student.files-student')
+        .findMany({
+          where: { student: studentId },
+          populate: {
+            file: true,
+            document_chunks: {
+              orderBy: { chunk_index: 'asc' },
+            },
+          },
+          limit: 10,
+        });
 
       if (!documents || documents.length === 0) {
         return [];
@@ -348,32 +367,14 @@ ${directiveInstruction}`;
 
       return documents.map((doc: any) => ({
         documentId: doc.documentId || doc.id?.toString(),
-        title: doc.title || 'Documento sin título',
+        title: doc.file?.name || doc.title || 'Documento sin título',
         summary: doc.summary || undefined,
-        content: this.buildContextFromChunks(doc.document_chunks || []),
+        content: this.buildContextFromChunks(doc.document_chunks || [], 3000),
       }));
     } catch (error) {
-      console.error('Error fetching directive context:', error);
+      console.error('Error loading all student documents:', error);
       return [];
     }
-  }
-
-  private buildDirectiveInstruction(
-    directive: DocumentDirective,
-    contextDocs: DocumentContext[]
-  ): string {
-    if (contextDocs.length === 0) {
-      return `El estudiante solicitó información sobre "${directive.query}" pero no se encontró ningún documento con ese título. Informa al estudiante que no tienes acceso a ese documento y sugiere que verifique el nombre exacto o suba el archivo si aún no lo ha hecho.`;
-    }
-
-    const titles = contextDocs.map(doc => `"${doc.title}"`).join(', ');
-    const baseInstruction =
-      directive.action === 'summarize'
-        ? 'El estudiante solicitó un resumen detallado del documento'
-        : 'El estudiante pidió que utilices específicamente el documento';
-
-    return `${baseInstruction} ${titles}.
-Satisface esta petición de manera prioritaria usando el contenido proporcionado.`;
   }
 
   private buildContextFromChunks(chunks: any[], maxChars: number = 2000): string {

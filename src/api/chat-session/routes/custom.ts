@@ -28,6 +28,15 @@ export default {
       },
     },
     {
+      method: "DELETE",
+      path: "/chat/:documentId",
+      handler: "chat-session.deleteSession",
+      config: {
+        policies: ["global::token-jwt"],
+        auth: false,
+      },
+    },
+    {
       method: "POST",
       path: "/chat/message",
       handler: "chat-session.sendMessage",
